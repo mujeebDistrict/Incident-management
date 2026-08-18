@@ -1,0 +1,87 @@
+name: incident-management-platform
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-imp}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-imp}
+      POSTGRES_DB: ${POSTGRES_DB:-imp}
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-imp}']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-imp}:${POSTGRES_PASSWORD:-imp}@postgres:5432/${POSTGRES_DB:-imp}
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-me}
+      WEB_ORIGIN: http://localhost:5173
+      PORT: 3000
+    ports:
+      - '3000:3000'
+    volumes:
+      - ./apps/api/src:/app/apps/api/src
+      - ./prisma:/app/prisma
+
+  worker:
+    build:
+      context: .
+      dockerfile: docker/worker.Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-imp}:${POSTGRES_PASSWORD:-imp}@postgres:5432/${POSTGRES_DB:-imp}
+      REDIS_URL: redis://redis:6379
+    volumes:
+      - ./apps/worker/src:/app/apps/worker/src
+      - ./prisma:/app/prisma
+
+  web:
+    build:
+      context: .
+      dockerfile: docker/web.Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      VITE_API_URL: http://localhost:3000/api
+      VITE_WS_URL: ws://localhost:3000
+    ports:
+      - '5173:5173'
+    volumes:
+      - ./apps/web/src:/app/apps/web/src
+
+volumes:
+  postgres_data:
