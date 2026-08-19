@@ -6,6 +6,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Role } from '@prisma/client';
+import { AddMemberDto } from './dto/add-member.dto';
 
 @Controller('teams')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -33,4 +34,17 @@ export class TeamsController {
   update(@Param('id') id: string, @Body() updateTeamDto: UpdateTeamDto) {
     return this.teamsService.update(id, updateTeamDto);
   }
+
+  @Post(':id/members')
+  @Roles(Role.ADMIN)
+  addMember(@Param('id') id: string, @Body() dto: AddMemberDto) {
+    return this.teamsService.addMember(id, dto.userId);
+  }
+
+  @Delete(':id/members/:userId')
+  @Roles(Role.ADMIN)
+  removeMember(@Param('id') id: string, @Param('userId') userId: string) {
+    return this.teamsService.removeMember(id, userId);
+  }
+
 }
