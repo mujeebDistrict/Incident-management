@@ -7,10 +7,11 @@ import { IncidentsModule } from './incidents/incidents.module';
 import { TeamsModule } from './teams/teams.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ConfigModule } from '@nestjs/config';
+import { ServicesModule } from './services/services.module';
 
 @Module({
   imports: [ConfigModule.forRoot({ isGlobal: true }),
-    UserModule, AuthModule, IncidentsModule, TeamsModule, PrismaModule],
+    UserModule, AuthModule, IncidentsModule, TeamsModule, PrismaModule, ServicesModule],
   controllers: [AppController],
   providers: [AppService],
 })
