@@ -59,8 +59,9 @@ export class IncidentsService {
   }
   ///////////////////////////////////////
   async findOne(id: string) {
-    const incident = await this.prisma.incident.findUnique({
+  const incident = await this.prisma.incident.findUnique({
       where: { id },
+      include: { events: { orderBy: { createdAt: 'asc' } } },
     });
 
     if (!incident) {
