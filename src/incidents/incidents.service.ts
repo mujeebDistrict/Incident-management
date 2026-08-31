@@ -6,10 +6,14 @@ import { PrismaService } from '../prisma/prisma.service';
 import { validateStatusTransition } from './incident-status.util';
 import { Prisma } from '@prisma/client';
 import { QueryIncidentsDto } from './dto/query-incidents.dto';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 
 @Injectable()
 export class IncidentsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, 
+    @InjectQueue('notificationQueue') private readonly notificationQueue: Queue
+  ) {}
 
   async create(dto: CreateIncidentDto, currentUserId: string) {
     const service = await this.prisma.service.findUnique({
@@ -30,6 +34,14 @@ export class IncidentsService {
         type: 'CREATED',
       },
     });
+
+    if (incident.severity === 'CRITICAL' && incident.assignedUserId) {
+      await this.notificationQueue.add('critical-incident', {
+        incidentId: incident.id,
+        userId: incident.assignedUserId,
+        message: `Critical incident created: ${incident.title}`,
+      });
+    }
 
     return incident;
   }
@@ -117,7 +129,7 @@ export class IncidentsService {
   }
 
   async assign(id: string, dto: AssignIncidentDto) {
-    await this.findOne(id);
+    const incident = await this.findOne(id);
 
     const updated = await this.prisma.incident.update({
       where: { id },
@@ -131,6 +143,14 @@ export class IncidentsService {
         payload: { ...dto },
       },
     });
+
+    if (dto.assignedUserId && incident.severity === 'CRITICAL') {
+      await this.notificationQueue.add('critical-assignment', {
+        incidentId: id,
+        userId: dto.assignedUserId,
+        message: `You've been assigned a critical incident: ${incident.title}`,
+      });
+    }
 
     return updated;
   }
