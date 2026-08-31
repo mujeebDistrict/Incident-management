@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { IncidentsService } from './incidents.service';
 import { IncidentsController } from './incidents.controller';
 import { BullModule } from '@nestjs/bullmq';
+import { IncidentsGateway } from './incidents.gateway';
 
 @Module({
   imports: [
@@ -10,6 +11,6 @@ import { BullModule } from '@nestjs/bullmq';
     }),
   ],
   controllers: [IncidentsController],
-  providers: [IncidentsService],
+  providers: [IncidentsService, IncidentsGateway],
 })
 export class IncidentsModule {}

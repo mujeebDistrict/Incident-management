@@ -8,11 +8,13 @@ import { Prisma } from '@prisma/client';
 import { QueryIncidentsDto } from './dto/query-incidents.dto';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
+import { IncidentsGateway } from './incidents.gateway';
 
 @Injectable()
 export class IncidentsService {
   constructor(private readonly prisma: PrismaService, 
-    @InjectQueue('notificationQueue') private readonly notificationQueue: Queue
+    @InjectQueue('notificationQueue') private readonly notificationQueue: Queue,
+    private readonly incidentsGateway: IncidentsGateway
   ) {}
 
   async create(dto: CreateIncidentDto, currentUserId: string) {
@@ -105,6 +107,8 @@ export class IncidentsService {
       });
     }
 
+    this.incidentsGateway.emitIncidentUpdated(id);
+
     return updated;
   }
 
@@ -124,6 +128,8 @@ export class IncidentsService {
         type: 'RESOLVED',
       },
     });
+
+    this.incidentsGateway.emitIncidentUpdated(id);
 
     return updated;
   }
@@ -151,6 +157,8 @@ export class IncidentsService {
         message: `You've been assigned a critical incident: ${incident.title}`,
       });
     }
+
+    this.incidentsGateway.emitIncidentUpdated(id);
 
     return updated;
   }
