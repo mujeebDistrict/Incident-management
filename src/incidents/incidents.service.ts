@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { CreateIncidentDto } from './dto/create-incident.dto';
 import { UpdateIncidentDto } from './dto/update-incident.dto';
 import { AssignIncidentDto } from './dto/assign-incident.dto';
+import { CreateCommentDto } from './dto/create-comment.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { validateStatusTransition } from './incident-status.util';
 import { Prisma } from '@prisma/client';
@@ -73,9 +74,17 @@ export class IncidentsService {
   }
   ///////////////////////////////////////
   async findOne(id: string) {
-  const incident = await this.prisma.incident.findUnique({
+    const incident = await this.prisma.incident.findUnique({
       where: { id },
-      include: { events: { orderBy: { createdAt: 'asc' } } },
+      include: {
+        events: { orderBy: { createdAt: 'asc' } },
+        comments: {
+          orderBy: { createdAt: 'asc' },
+          include: {
+            author: { select: { id: true, name: true, email: true } },
+          },
+        },
+      },
     });
 
     if (!incident) {
@@ -161,5 +170,28 @@ export class IncidentsService {
     this.incidentsGateway.emitIncidentUpdated(id);
 
     return updated;
+  }
+
+  async addComment(incidentId: string, authorId: string, dto: CreateCommentDto) {
+    await this.findOne(incidentId);
+
+    const comment = await this.prisma.incidentComment.create({
+      data: {
+        incidentId,
+        authorId,
+        body: dto.body
+      },
+    });
+
+    await this.prisma.incidentEvent.create({
+      data: {
+        incidentId,
+        type: 'COMMENTED'
+      },
+    });
+
+    this.incidentsGateway.emitIncidentUpdated(incidentId);
+
+    return comment;
   }
 }
