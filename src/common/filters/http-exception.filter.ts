@@ -1,12 +1,6 @@
-import {
-  ArgumentsHost,
-  Catch,
-  ExceptionFilter,
-  HttpException,
-  HttpStatus,
-  Logger,
-} from '@nestjs/common';
+import { ArgumentsHost, Catch, ExceptionFilter, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { Request, Response } from 'express';
+import { Prisma } from '@prisma/client';
 
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
@@ -16,6 +10,18 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
     const request = ctx.getRequest<Request>();
+
+    if (exception instanceof Prisma.PrismaClientKnownRequestError) {
+      const { status, message } = this.mapPrismaError(exception);
+      response.status(status).json({
+        statusCode: status,
+        message,
+        error: 'PrismaError',
+        path: request.url,
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
 
     const isHttpException = exception instanceof HttpException;
     const status = isHttpException
@@ -42,5 +48,18 @@ export class AllExceptionsFilter implements ExceptionFilter {
       path: request.url,
       timestamp: new Date().toISOString(),
     });
+  }
+
+  private mapPrismaError(error: Prisma.PrismaClientKnownRequestError): { status: number; message: string } {
+    switch (error.code) {
+      case 'P2002':
+        return { status: 409, message: 'A record with this value already exists' };
+      case 'P2025':
+        return { status: 404, message: 'Record not found' };
+      case 'P2003':
+        return { status: 400, message: 'Invalid reference — related record does not exist' };
+      default:
+        return { status: 500, message: 'Database error' };
+    }
   }
 }

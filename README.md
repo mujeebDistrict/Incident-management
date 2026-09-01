@@ -1,98 +1,116 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Incident Management Platform
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+A one-week AI-assisted engineering sprint building an incident management
+platform (a lightweight PagerDuty/Opsgenie). See ARCHITECTURE.md for
+design decisions and CONTRIBUTING.md for git workflow and AI usage.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## Repo layout
 
-## Description
+Backend and frontend are separate sibling repos, not a monorepo:
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+master-incident-management-platform/
+- Incident-management/           NestJS API + standalone BullMQ worker
+  - worker/                      separate process, own package.json,
+                                  shares prisma/schema.prisma
+- Incident-Management-Frontend/  React (Vite) app
 
-## Project setup
+## Stack
 
-```bash
-$ npm install
-```
+NestJS, PostgreSQL (Prisma 6.19.3), Redis, BullMQ, Socket.IO,
+React (Vite), Docker Compose (Postgres/Redis only — see Known Gaps)
 
-## Compile and run the project
+## Status: Day 6 of 7
 
-```bash
-# development
-$ npm run start
+### Done
+- Auth: register/login/JWT, role guards (ADMIN/ENGINEER/VIEWER)
+- Users, Teams (+ membership), Services — full CRUD, role-gated writes
+- Incidents: full CRUD, state machine (linear, no reopen), pagination,
+  filtering (severity/status/serviceId), assign, resolve
+- Redis caching (GET /services, GET /dashboard/summary) with
+  write-invalidation
+- Rate limiting: global (20/min/IP), stricter on /auth/login (5/min)
+- BullMQ notification pipeline: CRITICAL incident assignment to
+  queue to standalone worker to Notification row
+- WebSocket live updates on incident change (status, assign, resolve,
+  comments)
+- Comments on incidents (with author info, live-updating)
+- Dashboard summary endpoint + page
+- Audit log (team membership changes only), ADMIN-only, paginated
+- Automated tests: state machine unit tests, full auth/RBAC E2E suite
+  (14 E2E + 12 unit tests, all passing)
+- Global Prisma error handling (P2002/P2025/P2003 mapped to sensible
+  HTTP responses, not raw 500s)
 
-# watch mode
-$ npm run start:dev
+### Known gaps
+- Docker: api/worker/web never containerized or tested.
+  Only Postgres and Redis have been run via docker compose up.
+  The app has run via npm run start:dev all week — docker-compose.yml
+  still references a stale monorepo layout (apps/api, apps/worker)
+  that no longer matches this repo's actual structure. This means
+  the app cannot currently be deployed as docker-compose.yml
+  describes — that file needs a rewrite, not just a fix.
+- Sorting on GET /incidents (severity/status/date) — not implemented,
+  deferred by choice
+- No frontend page for the audit log (API-only feature)
+- Dashboard.tsx shows counts only — no charts/trends
 
-# production mode
-$ npm run start:prod
-```
+## Known issues / decisions worth knowing about
 
-## Run tests
+- Prisma pinned to 6.x, not 7.x. Prisma 7 requires a driver-adapter
+  setup (prisma.config.ts, changed PrismaClient constructor) across
+  every service. Deferred for scope.
+- BullMQ, not RabbitMQ/Kafka. Already had Redis in the stack; the
+  actual need (one producer, one consumer, "do this later") doesn't
+  justify a dedicated message broker's operational overhead.
+- git filter-repo was used to strip ~100MB of accidentally-committed
+  worker/node_modules from the entire git history. This rewrote every
+  commit hash. Anyone with an existing clone must re-clone or run
+  git fetch origin && git reset --hard origin/master.
+- One npm audit advisory (deepmerge-ts, via @prisma/config) is a
+  known, accepted risk — affects the Prisma CLI only, not runtime code.
 
-```bash
-# unit tests
-$ npm run test
+## Local setup
 
-# e2e tests
-$ npm run test:e2e
+Backend:
+cd Incident-management
+cp .env.example .env       (adjust DATABASE_URL, REDIS_URL, JWT_SECRET)
+docker compose up postgres redis -d
+npm install
+npx prisma generate --schema=prisma/schema.prisma
+npx prisma migrate dev --schema=prisma/schema.prisma
+npm run start:dev          (http://localhost:3000)
 
-# test coverage
-$ npm run test:cov
-```
+Worker (separate terminal):
+cd Incident-management/worker
+npm install
+npx prisma generate --schema=../prisma/schema.prisma
+npm run start:dev
 
-## Deployment
+Frontend (separate terminal):
+cd Incident-Management-Frontend
+npm install
+npm run dev                (http://localhost:5173)
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+## Running tests
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+cd Incident-management
+npm test          (unit tests)
+npm run test:e2e  (E2E — auth flow, role enforcement, protected routes)
 
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
-```
+## Repo layout (backend)
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
-
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+Incident-management/
+- src/
+  - auth/        register/login, JWT strategy, guards, decorators
+  - users/       GET /users/me, GET /users
+  - teams/       CRUD + membership, audit-logged
+  - services/    CRUD, cached
+  - incidents/   CRUD, state machine, comments, WebSocket gateway
+  - dashboard/   cached summary endpoint
+  - audit/       audit log service + endpoint
+  - redis/       RedisService (ioredis, @Global)
+  - prisma/      PrismaService (@Global)
+  - common/      global exception filter, health check
+- worker/        standalone BullMQ consumer process
+- prisma/        schema.prisma, migrations/
+- test/          E2E specs
