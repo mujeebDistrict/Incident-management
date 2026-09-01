@@ -2,11 +2,15 @@ import { Injectable, NotFoundException, ConflictException } from '@nestjs/common
 import { CreateTeamDto } from './dto/create-team.dto';
 import { UpdateTeamDto } from './dto/update-team.dto';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuditService } from '../audit/audit.service';
 import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class TeamsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
+  ) {}
 
   async create(dto: CreateTeamDto) {
     const { name } = dto;
@@ -49,21 +53,26 @@ export class TeamsService {
     });
   }
 
-  async addMember(teamId: string, userId: string) {
-    const foundTeam = await this.findOne(teamId);
-    const foundUser = await this.prisma.user.findUnique({where: {
-      id: userId,
-    }});
+  async addMember(teamId: string, userId: string, actingUserId: string) {
+    await this.findOne(teamId);
+
+    const foundUser = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
 
     if (!foundUser) {
       throw new NotFoundException();
     }
 
     try {
-      return await this.prisma.teamMember.create({ data: {
-        teamId, userId  
-      }});
-    } catch(error) {  
+      const member = await this.prisma.teamMember.create({
+        data: { teamId, userId },
+      });
+
+      await this.audit.log(actingUserId, 'ADD_MEMBER', 'Team', teamId, undefined, { userId });
+
+      return member;
+    } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
         throw new ConflictException('User is already a member of this team');
       }
@@ -71,7 +80,7 @@ export class TeamsService {
     }
   }
 
-  async removeMember(teamId: string, userId: string) {
+  async removeMember(teamId: string, userId: string, actingUserId: string) {
     await this.findOne(teamId);
 
     try {
@@ -80,6 +89,8 @@ export class TeamsService {
           userId_teamId: { userId, teamId },
         },
       });
+
+      await this.audit.log(actingUserId, 'REMOVE_MEMBER', 'Team', teamId, { userId }, undefined);
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
         throw new NotFoundException('This user is not a member of this team');

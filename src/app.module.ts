@@ -6,6 +6,7 @@ import { AuthModule } from './auth/auth.module';
 import { IncidentsModule } from './incidents/incidents.module';
 import { TeamsModule } from './teams/teams.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ServicesModule } from './services/services.module';
 import { RedisModule } from './redis/redis.module';
@@ -15,7 +16,7 @@ import { BullModule } from '@nestjs/bullmq';
 
 @Module({
   imports: [ConfigModule.forRoot({ isGlobal: true }),
-    UserModule, AuthModule, IncidentsModule, TeamsModule, PrismaModule, RedisModule, ServicesModule, 
+    UserModule, AuthModule, IncidentsModule, DashboardModule ,TeamsModule, PrismaModule, RedisModule, ServicesModule, 
       ThrottlerModule.forRoot([
         {
           ttl: 60000,

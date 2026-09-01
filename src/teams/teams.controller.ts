@@ -7,6 +7,8 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Role } from '@prisma/client';
 import { AddMemberDto } from './dto/add-member.dto';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { User } from '@prisma/client';
 
 @Controller('teams')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -37,14 +39,21 @@ export class TeamsController {
 
   @Post(':id/members')
   @Roles(Role.ADMIN)
-  addMember(@Param('id') id: string, @Body() dto: AddMemberDto) {
-    return this.teamsService.addMember(id, dto.userId);
+  addMember(
+    @Param('id') id: string,
+    @Body() dto: AddMemberDto,
+    @CurrentUser() user: Pick<User, 'id' | 'email' | 'role'>,
+  ) {
+    return this.teamsService.addMember(id, dto.userId, user.id);
   }
 
   @Delete(':id/members/:userId')
   @Roles(Role.ADMIN)
-  removeMember(@Param('id') id: string, @Param('userId') userId: string) {
-    return this.teamsService.removeMember(id, userId);
+  removeMember(
+    @Param('id') id: string,
+    @Param('userId') userId: string,
+    @CurrentUser() user: Pick<User, 'id' | 'email' | 'role'>,
+  ) {
+    return this.teamsService.removeMember(id, userId, user.id);
   }
-
 }
