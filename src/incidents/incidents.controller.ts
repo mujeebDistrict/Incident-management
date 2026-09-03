@@ -10,7 +10,10 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Role, User } from '@prisma/client';
 import { QueryIncidentsDto } from './dto/query-incidents.dto';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 
+@ApiTags('incidents')
+@ApiBearerAuth()
 @Controller('incidents')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class IncidentsController {

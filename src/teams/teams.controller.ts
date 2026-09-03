@@ -9,9 +9,10 @@ import { Role } from '@prisma/client';
 import { AddMemberDto } from './dto/add-member.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { User } from '@prisma/client';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 
-
-
+@ApiTags('teams')
+@ApiBearerAuth()
 @Controller('teams')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class TeamsController {
