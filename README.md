@@ -17,9 +17,10 @@ master-incident-management-platform/
 ## Stack
 
 NestJS, PostgreSQL (Prisma 6.19.3), Redis, BullMQ, Socket.IO,
-React (Vite), Docker Compose (Postgres/Redis only — see Known Gaps)
+React (Vite), Swagger/OpenAPI, GitHub Actions CI,
+Docker Compose (Postgres/Redis only — see Known Gaps)
 
-## Status: Day 6 of 7
+## Status: Day 7 of 7 — feature complete
 
 ### Done
 - Auth: register/login/JWT, role guards (ADMIN/ENGINEER/VIEWER)
@@ -40,6 +41,11 @@ React (Vite), Docker Compose (Postgres/Redis only — see Known Gaps)
   (14 E2E + 12 unit tests, all passing)
 - Global Prisma error handling (P2002/P2025/P2003 mapped to sensible
   HTTP responses, not raw 500s)
+- Swagger/OpenAPI docs at /api-docs, grouped by module, with bearer
+  auth support for testing endpoints directly from the docs UI
+- CI (GitHub Actions): install, prisma generate/migrate, build, unit
+  tests, E2E tests, against real Postgres/Redis service containers,
+  on every push/PR
 
 ### Known gaps
 - Docker: api/worker/web never containerized or tested.
@@ -53,6 +59,9 @@ React (Vite), Docker Compose (Postgres/Redis only — see Known Gaps)
   deferred by choice
 - No frontend page for the audit log (API-only feature)
 - Dashboard.tsx shows counts only — no charts/trends
+- No optimistic locking / concurrency control — two simultaneous
+  updates to the same incident are not specially handled (last write
+  wins, no conflict detection)
 
 ## Known issues / decisions worth knowing about
 
@@ -68,6 +77,10 @@ React (Vite), Docker Compose (Postgres/Redis only — see Known Gaps)
   git fetch origin && git reset --hard origin/master.
 - One npm audit advisory (deepmerge-ts, via @prisma/config) is a
   known, accepted risk — affects the Prisma CLI only, not runtime code.
+- Several dependencies (@nestjs/websockets, @nestjs/platform-socket.io,
+  @nestjs/swagger) required pinning to the ^11.0.0 line explicitly —
+  their latest majors require @nestjs/common@^12, one version ahead
+  of this project's @nestjs/common@11.x.
 
 ## Local setup
 
@@ -79,6 +92,7 @@ npm install
 npx prisma generate --schema=prisma/schema.prisma
 npx prisma migrate dev --schema=prisma/schema.prisma
 npm run start:dev          (http://localhost:3000)
+Swagger docs:                http://localhost:3000/api-docs
 
 Worker (separate terminal):
 cd Incident-management/worker
@@ -97,6 +111,9 @@ cd Incident-management
 npm test          (unit tests)
 npm run test:e2e  (E2E — auth flow, role enforcement, protected routes)
 
+Also runs automatically in CI on every push/PR — see
+.github/workflows/ci.yml.
+
 ## Repo layout (backend)
 
 Incident-management/
@@ -114,3 +131,4 @@ Incident-management/
 - worker/        standalone BullMQ consumer process
 - prisma/        schema.prisma, migrations/
 - test/          E2E specs
+- .github/workflows/ci.yml
